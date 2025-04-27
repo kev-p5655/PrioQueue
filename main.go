@@ -23,9 +23,9 @@ const JOB_TABLE_NAME string = "jobs"
 
 // TODO: Could add most of these functions to an interface, so it's easier to swap the sqlite implementation with something else.
 type Job struct {
-	id          int
-	description string
-	priority    int
+	Id          int    `json:"id"`
+	Description string `json:"description"`
+	Priority    int    `json:"priority"`
 }
 
 func createDb() (*sql.DB, error) {
@@ -115,7 +115,7 @@ func getAllJobs(db *sql.DB) (jobs []Job, err error) {
 	rows, err := db.Query(query)
 	for rows.Next() {
 		var job Job
-		if err := rows.Scan(&job.id, &job.description, &job.priority); err != nil {
+		if err := rows.Scan(&job.Id, &job.Description, &job.Priority); err != nil {
 			return jobs, err
 		}
 		jobs = append(jobs, job)
@@ -161,12 +161,36 @@ func handleHello() gin.HandlerFunc {
 	}
 }
 
-func addRoutes(r *gin.RouterGroup) {
+// @BasePath /api/v1
+// @Summary Get all jobs
+// @Schemes
+// @Description Gets all jobs ordered by priority
+// @Tags Jobs
+// @Accept json
+// @Produce json
+// @Success 200 {array} Job
+// @Router /jobs [get]
+func handleListJobs(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		jobs, err := getAllJobs(db)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		} else {
+			c.JSON(http.StatusOK, jobs)
+		}
+	}
+}
+
+func addRoutes(r *gin.RouterGroup, db *sql.DB, logger *slog.Logger) {
 	r.GET("/hello", handleHello())
+	r.GET("/jobs", handleListJobs(db))
 }
 
 func run(
 	ctx context.Context,
+	logger *slog.Logger,
 	args []string,
 	getenv func(string) string,
 	stdin io.Reader,
@@ -178,17 +202,25 @@ func run(
 	docs.SwaggerInfo.Description = "This api has endpoints for managing a priority queue"
 	docs.SwaggerInfo.Version = "1.0"
 	docs.SwaggerInfo.BasePath = "/api/v1"
-	v1 := r.Group("/api/v1")
-	addRoutes(v1)
 
-	err := r.Run("localhost:8080")
+	db, err := initDb()
+	if err != nil {
+		// This would be a big problem
+		logger.Error(err.Error())
+		os.Exit(1)
+	}
+	defer db.Close() // Some of the db stuff could get moved elsewhere, but I don't know how to correctly defer closing it if it's in another function?
+
+	v1 := r.Group("/api/v1")
+	addRoutes(v1, db, logger)
+
+	err = r.Run("localhost:8080")
 	return err
 }
 
 func setupLogging() *slog.Logger {
 	log.SetFlags(log.LstdFlags | log.Lshortfile)
 	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
-	// logger := log.New(os.Stdout, "my:", log.LstdFlags)
 	return logger
 }
 
@@ -227,7 +259,7 @@ func main() {
 
 	// Run/setup http server
 	ctx := context.Background()
-	err = run(ctx, nil, nil, nil, nil, nil)
+	err = run(ctx, logger, nil, nil, nil, nil, nil)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(2)

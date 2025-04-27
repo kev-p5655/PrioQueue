@@ -5,6 +5,15 @@ definitions:
       message:
         type: string
     type: object
+  main.Job:
+    properties:
+      description:
+        type: string
+      id:
+        type: integer
+      priority:
+        type: integer
+    type: object
 info:
   contact: {}
 paths:
@@ -23,4 +32,21 @@ paths:
       summary: hello world example
       tags:
       - my_example
+  /jobs:
+    get:
+      consumes:
+      - application/json
+      description: Gets all jobs ordered by priority
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.Job'
+            type: array
+      summary: Get all jobs
+      tags:
+      - Jobs
 swagger: "2.0"

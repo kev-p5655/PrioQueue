@@ -37,6 +37,32 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/jobs": {
+            "get": {
+                "description": "Gets all jobs ordered by priority",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Get all jobs",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/main.Job"
+                            }
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {
@@ -45,6 +71,20 @@ const docTemplate = `{
             "properties": {
                 "message": {
                     "type": "string"
+                }
+            }
+        },
+        "main.Job": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "priority": {
+                    "type": "integer"
                 }
             }
         }

@@ -1,13 +1,9 @@
-basePath: /api/v1
 definitions:
-  main.Body:
-    properties:
-      message:
-        type: string
-    type: object
   main.Job:
     properties:
       description:
+        type: string
+      finished_at:
         type: string
       id:
         type: integer
@@ -17,21 +13,6 @@ definitions:
 info:
   contact: {}
 paths:
-  /hello:
-    get:
-      consumes:
-      - application/json
-      description: do thing
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/main.Body'
-      summary: hello world example
-      tags:
-      - my_example
   /jobs:
     get:
       consumes:
@@ -47,6 +28,31 @@ paths:
               $ref: '#/definitions/main.Job'
             type: array
       summary: Get all jobs
+      tags:
+      - Jobs
+    post:
+      consumes:
+      - application/json
+      description: Creates jobs
+      parameters:
+      - description: An array of Job descriptions
+        in: body
+        name: jobDescriptions
+        required: true
+        schema:
+          items:
+            type: string
+          type: array
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/main.Job'
+            type: array
+      summary: Create jobs
       tags:
       - Jobs
 swagger: "2.0"

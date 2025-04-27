@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	docs "PrioQueue/docs"
 
@@ -23,9 +24,10 @@ const JOB_TABLE_NAME string = "jobs"
 
 // TODO: Could add most of these functions to an interface, so it's easier to swap the sqlite implementation with something else.
 type Job struct {
-	Id          int    `json:"id"`
-	Description string `json:"description"`
-	Priority    int    `json:"priority"`
+	Id          int       `json:"id"`
+	Description string    `json:"description"`
+	Priority    int       `json:"priority"`
+	FinishedAt  time.Time `json:"finished_at"`
 }
 
 func createDb() (*sql.DB, error) {
@@ -39,7 +41,8 @@ func createTables(db *sql.DB) error {
 		CREATE TABLE IF NOT EXISTS %s (
 		id INTEGER NOT NULL PRIMARY KEY,
 		description TEXT,
-		priority INTEGER NOT NULL
+		priority INTEGER NOT NULL,
+		finished_at DATETIME
 		);`,
 		JOB_TABLE_NAME,
 	)
@@ -59,15 +62,13 @@ func initDb() (*sql.DB, error) {
 	return db, err
 }
 
-func createJobInsertQuery(db *sql.DB) (query string, err error) {
-	// Create the elements to insert
-	descriptions := []string{"hello", "goodbye"}
+func createJobInsertQuery(db *sql.DB, descriptions []string) (query string, err error) {
 	currPrio, err := getCurrPrio(db)
 	if err != nil {
 		return
 	}
-
 	currPrio++
+
 	items := []string{}
 	for i, description := range descriptions {
 		items = append(items,
@@ -105,6 +106,8 @@ func getCurrPrio(db *sql.DB) (prio int, err error) {
 }
 
 func getAllJobs(db *sql.DB) (jobs []Job, err error) {
+	// Define to be empty array, instead of nil.
+	jobs = []Job{}
 	query := fmt.Sprintf(`
 		SELECT id, description, priority
 		FROM %s
@@ -123,53 +126,66 @@ func getAllJobs(db *sql.DB) (jobs []Job, err error) {
 	return
 }
 
-func exec(db *sql.DB, query string) (err error) {
+func exec(db *sql.DB, query string) (result sql.Result, err error) {
 	stmt, err := db.Prepare(query)
 	if err != nil {
-		return err
+		return
 	}
-	_, err = stmt.Exec()
-	if err != nil {
-		return err
-	}
-
-	return err
-}
-
-type Body struct {
-	Message string `json:"message"`
+	result, err = stmt.Exec()
+	return
 }
 
 // Http related code. This probably should get moved to another module?
-//	@BasePath	/api/v1
 
-// Example thing wow!
-//
-//	@Summary	hello world example
+//	@BasePath	/api/v1
+//	@Summary	Create jobs
 //	@Schemes
-//	@Description	do thing
-//	@Tags			my_example
+//	@Description	Creates jobs
+//	@Tags			Jobs
 //	@Accept			json
 //	@Produce		json
-//	@Success		200	{object} Body
-//	@Router			/hello [get]
-func handleHello() gin.HandlerFunc {
+//	@Param			jobDescriptions	body	[]string	true	"An array of Job descriptions"
+//	@Success		200				{array}	Job
+//	@Router			/jobs [post]
+func handleCreateJobs(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, Body{
-			Message: "hello world\n",
+		var newJobs []string
+		if err := c.BindJSON(&newJobs); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error": err.Error(),
+			})
+			return
+		}
+		query, err := createJobInsertQuery(db, newJobs)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+		_, err = exec(db, query)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": err.Error(),
+			})
+		}
+		fmt.Println(newJobs)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Need to return the jobs that are created.",
 		})
+		// TODO: Need to get the result from the execution of the query, and return all the new job records.
+		//		This kinda shows how the structure of the code currently sucks. B/c a lot of this logic should be handled by some "service" that handles all the interaction with the database. Instead of in the handler function.
 	}
 }
 
-// @BasePath /api/v1
-// @Summary Get all jobs
-// @Schemes
-// @Description Gets all jobs ordered by priority
-// @Tags Jobs
-// @Accept json
-// @Produce json
-// @Success 200 {array} Job
-// @Router /jobs [get]
+//	@BasePath	/api/v1
+//	@Summary	Get all jobs
+//	@Schemes
+//	@Description	Gets all jobs ordered by priority
+//	@Tags			Jobs
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{array}	Job
+//	@Router			/jobs [get]
 func handleListJobs(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jobs, err := getAllJobs(db)
@@ -177,15 +193,15 @@ func handleListJobs(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error": err.Error(),
 			})
-		} else {
-			c.JSON(http.StatusOK, jobs)
+			return
 		}
+		c.JSON(http.StatusOK, jobs)
 	}
 }
 
 func addRoutes(r *gin.RouterGroup, db *sql.DB, logger *slog.Logger) {
-	r.GET("/hello", handleHello())
 	r.GET("/jobs", handleListJobs(db))
+	r.POST("/jobs", handleCreateJobs(db))
 }
 
 func run(
@@ -227,39 +243,10 @@ func setupLogging() *slog.Logger {
 func main() {
 	// Setup
 	logger := setupLogging()
-
-	// Kinda feels like a lot of the db stuff should be moved elsewhere. Like into the "run" function.
-	//	I guess if I actually setup the http stuff. This should be moved to run, also handlers should be setup with a middleware that connects to the db instead of needing to pass in the connection?
-	db, err := initDb()
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	defer db.Close()
-
-	// Queries
-	query, err := createJobInsertQuery(db)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	err = exec(db, query)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	jobs, err := getAllJobs(db)
-	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
-	}
-	for _, job := range jobs {
-		logger.Info("Obtained job", slog.Any("job", job))
-	}
-
-	// Run/setup http server
 	ctx := context.Background()
-	err = run(ctx, logger, nil, nil, nil, nil, nil)
+
+	// Run http server
+	err := run(ctx, logger, nil, nil, nil, nil, nil)
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(2)

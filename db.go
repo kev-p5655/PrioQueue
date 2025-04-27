@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	_ "github.com/mattn/go-sqlite3"
 )
 
 const JOB_TABLE_NAME string = "jobs"
 
 type Job struct {
-	Id          int       `json:"id"`
-	Description string    `json:"description"`
-	Priority    int       `json:"priority"`
-	FinishedAt  time.Time `json:"finished_at"`
+	Id          int        `json:"id"`
+	Description string     `json:"description"`
+	Priority    int        `json:"priority"`
+	FinishedAt  *time.Time `json:"finished_at"`
 }
-
-// TODO: Could add most of these functions to an interface, so it's easier to swap the sqlite implementation with something else.
 
 func createDb() (*sql.DB, error) {
 	const file string = "jobs.db"
@@ -75,6 +75,36 @@ func createJobInsertQuery(db *sql.DB, descriptions []string) (query string, err 
 	return
 }
 
+func createJobs(db *sql.DB, descriptions []string) (jobs []Job, err error) {
+	// TODO: Make this return the jobs correctly
+	query, err := createJobInsertQuery(db, descriptions)
+	if err != nil {
+		return
+	}
+	_, err = exec(db, query)
+	return
+}
+
+func updateJobPriority(db *sql.DB, id int, priority int) (job Job, err error) {
+	// TODO: Make this return the jobs correctly
+	query := fmt.Sprintf(`
+		UPDATE %s
+		SET priority = %d
+		WHERE id = %d
+		;`,
+		JOB_TABLE_NAME,
+		priority,
+		id,
+	)
+
+	_, err = exec(db, query)
+
+	// Both of these are 0 <nil> if no rows were updated.
+	// fmt.Println(result.LastInsertId())
+	// fmt.Println(result.RowsAffected())
+	return
+}
+
 func getCurrPrio(db *sql.DB) (prio int, err error) {
 	query := fmt.Sprintf(`
 		SELECT priority
@@ -97,7 +127,7 @@ func getAllJobs(db *sql.DB) (jobs []Job, err error) {
 	// Define to be empty array, instead of nil.
 	jobs = []Job{}
 	query := fmt.Sprintf(`
-		SELECT id, description, priority
+		SELECT id, description, priority, finished_at
 		FROM %s
 		ORDER by priority ASC
 		`,
@@ -106,7 +136,7 @@ func getAllJobs(db *sql.DB) (jobs []Job, err error) {
 	rows, err := db.Query(query)
 	for rows.Next() {
 		var job Job
-		if err := rows.Scan(&job.Id, &job.Description, &job.Priority); err != nil {
+		if err := rows.Scan(&job.Id, &job.Description, &job.Priority, &job.FinishedAt); err != nil {
 			return jobs, err
 		}
 		jobs = append(jobs, job)

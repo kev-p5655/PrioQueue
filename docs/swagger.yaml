@@ -55,4 +55,30 @@ paths:
       summary: Create jobs
       tags:
       - Jobs
+  /jobs/{id}:
+    patch:
+      consumes:
+      - application/json
+      description: Updates a jobs priority
+      parameters:
+      - description: The id of the job being updated
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: The new priority
+        in: query
+        name: priority
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Job'
+      summary: Update job priority
+      tags:
+      - Jobs
 swagger: "2.0"

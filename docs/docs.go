@@ -78,6 +78,45 @@ const docTemplate = `{
                     }
                 }
             }
+        },
+        "/jobs/{id}": {
+            "patch": {
+                "description": "Updates a jobs priority",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Update job priority",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "The id of the job being updated",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "description": "The new priority",
+                        "name": "priority",
+                        "in": "query",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.Job"
+                        }
+                    }
+                }
+            }
         }
     },
     "definitions": {

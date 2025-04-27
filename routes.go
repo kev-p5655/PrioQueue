@@ -2,12 +2,32 @@ package main
 
 import (
 	"database/sql"
-	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/gin-gonic/gin"
 )
+
+func checkBadRequestError(c *gin.Context, err error) bool {
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": err.Error(),
+		})
+		return true
+	}
+	return false
+}
+
+func checkInternalError(c *gin.Context, err error) bool {
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": err.Error(),
+		})
+		return true
+	}
+	return false
+}
 
 // @BasePath	/api/v1
 // @Summary	Create jobs
@@ -19,28 +39,19 @@ import (
 // @Param			jobDescriptions	body	[]string	true	"An array of Job descriptions"
 // @Success		200				{array}	Job
 // @Router			/jobs [post]
-func handleCreateJobs(db *sql.DB) gin.HandlerFunc {
+func handleCreateJobs(db *sql.DB, logger *slog.Logger) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var newJobs []string
-		if err := c.BindJSON(&newJobs); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error": err.Error(),
-			})
+		if checkBadRequestError(c, c.BindJSON(&newJobs)) {
 			return
 		}
-		query, err := createJobInsertQuery(db, newJobs)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+
+		_, err := createJobs(db, newJobs)
+		if checkInternalError(c, err) {
+			logger.Error("Error creating jobs", slog.String("error", err.Error()))
+			return
 		}
-		_, err = exec(db, query)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
-		}
-		fmt.Println(newJobs)
+
 		c.JSON(http.StatusOK, gin.H{
 			"message": "Need to return the jobs that are created.",
 		})
@@ -61,17 +72,55 @@ func handleCreateJobs(db *sql.DB) gin.HandlerFunc {
 func handleListJobs(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		jobs, err := getAllJobs(db)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error": err.Error(),
-			})
+		if checkInternalError(c, err) {
 			return
 		}
 		c.JSON(http.StatusOK, jobs)
 	}
 }
 
+// @BasePath /api/v1
+// @Summary Update job priority
+// @Schemes
+// @Description Updates a jobs priority
+// @Tags Jobs
+// @Accept json
+// @Produce json
+// @Param id path int true "The id of the job being updated"
+// @Param priority query int true "The new priority"
+// @Success 200 {object} Job
+// @Router /jobs/{id} [patch]
+func handleUpdatePriority(
+	db *sql.DB,
+	logger *slog.Logger,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if checkBadRequestError(c, err) {
+			logger.Error("Error parsing param id", slog.String("error", err.Error()))
+			return
+		}
+
+		priority, err := strconv.Atoi(c.Query("priority"))
+		if checkBadRequestError(c, err) {
+			logger.Error("Error parsing param priority", slog.String("error", err.Error()))
+			return
+		}
+
+		_, err = updateJobPriority(db, id, priority)
+		if checkInternalError(c, err) {
+			logger.Error("Error updating job priority", slog.String("error", err.Error()))
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Need to return the updated job struct",
+		})
+	}
+}
+
 func addRoutes(r *gin.RouterGroup, db *sql.DB, logger *slog.Logger) {
 	r.GET("/jobs", handleListJobs(db))
-	r.POST("/jobs", handleCreateJobs(db))
+	r.POST("/jobs", handleCreateJobs(db, logger))
+	r.PATCH("/jobs/:id", handleUpdatePriority(db, logger))
 }

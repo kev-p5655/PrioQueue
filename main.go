@@ -1,8 +1,13 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
+	"io"
+	"log"
+	"log/slog"
+	"net/http"
 	"os"
 	"strings"
 
@@ -11,6 +16,7 @@ import (
 
 const JOB_TABLE_NAME string = "jobs"
 
+// TODO: Could add most of these functions to an interface, so it's easier to swap the sqlite implementation with something else.
 type Job struct {
 	id          int
 	description string
@@ -18,7 +24,7 @@ type Job struct {
 }
 
 func createDb() (*sql.DB, error) {
-	const file string = "foo.db"
+	const file string = "jobs.db"
 	db, err := sql.Open("sqlite3", file)
 	return db, err
 }
@@ -57,10 +63,8 @@ func createJobInsertQuery(db *sql.DB) (query string, err error) {
 	}
 
 	currPrio++
-	fmt.Println(descriptions)
 	items := []string{}
 	for i, description := range descriptions {
-		fmt.Println(description)
 		items = append(items,
 			fmt.Sprintf(`("%s", %d)`, description, currPrio+i),
 		)
@@ -127,33 +131,75 @@ func exec(db *sql.DB, query string) (err error) {
 	return err
 }
 
+// Http related code. This probably should get moved to another module?
+func handleHello() http.HandlerFunc {
+	return func(w http.ResponseWriter, req *http.Request) {
+		fmt.Fprintf(w, "hello world\n")
+	}
+}
+
+func addRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("/hello", handleHello())
+}
+
+func run(
+	ctx context.Context,
+	args []string,
+	getenv func(string) string,
+	stdin io.Reader,
+	stdout, strerr io.Writer,
+) error {
+	mux := http.NewServeMux()
+	addRoutes(mux)
+	err := http.ListenAndServe(":8080", mux)
+	return err
+}
+
+func setupLogging() *slog.Logger {
+	log.SetFlags(log.LstdFlags | log.Lshortfile)
+	logger := slog.New(slog.NewTextHandler(os.Stdout, nil))
+	// logger := log.New(os.Stdout, "my:", log.LstdFlags)
+	return logger
+}
+
 func main() {
 	// Setup
+	logger := setupLogging()
+
+	// Kinda feels like a lot of the db stuff should be moved elsewhere. Like into the "run" function.
+	//	I guess if I actually setup the http stuff. This should be moved to run, also handlers should be setup with a middleware that connects to the db instead of needing to pass in the connection?
 	db, err := initDb()
+	defer db.Close()
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
-	defer db.Close()
 
 	// Queries
 	query, err := createJobInsertQuery(db)
-	fmt.Println(query)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	err = exec(db, query)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	jobs, err := getAllJobs(db)
 	if err != nil {
-		fmt.Println(err)
+		logger.Error(err.Error())
 		os.Exit(1)
 	}
 	for _, job := range jobs {
-		fmt.Println(job)
+		logger.Info("Obtained job", slog.Any("job", job))
 	}
+
+	// // Run/setup http server
+	// ctx := context.Background()
+	// err = run(ctx, nil, nil, nil, nil, nil)
+	// if err != nil {
+	// 	fmt.Println(err)
+	// 	os.Exit(2)
+	// }
 }

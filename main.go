@@ -11,7 +11,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
+	// "github.com/swaggo/gin-swagger"
 )
 
 const JOB_TABLE_NAME string = "jobs"
@@ -132,14 +134,16 @@ func exec(db *sql.DB, query string) (err error) {
 }
 
 // Http related code. This probably should get moved to another module?
-func handleHello() http.HandlerFunc {
-	return func(w http.ResponseWriter, req *http.Request) {
-		fmt.Fprintf(w, "hello world\n")
+func handleHello() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
+			"message": "hello world\n",
+		})
 	}
 }
 
-func addRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("/hello", handleHello())
+func addRoutes(r *gin.Engine) {
+	r.GET("/hello", handleHello())
 }
 
 func run(
@@ -149,9 +153,9 @@ func run(
 	stdin io.Reader,
 	stdout, strerr io.Writer,
 ) error {
-	mux := http.NewServeMux()
-	addRoutes(mux)
-	err := http.ListenAndServe(":8080", mux)
+	r := gin.Default()
+	addRoutes(r)
+	err := r.Run("localhost:8080")
 	return err
 }
 
@@ -169,11 +173,11 @@ func main() {
 	// Kinda feels like a lot of the db stuff should be moved elsewhere. Like into the "run" function.
 	//	I guess if I actually setup the http stuff. This should be moved to run, also handlers should be setup with a middleware that connects to the db instead of needing to pass in the connection?
 	db, err := initDb()
-	defer db.Close()
 	if err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
+	defer db.Close()
 
 	// Queries
 	query, err := createJobInsertQuery(db)
@@ -195,11 +199,11 @@ func main() {
 		logger.Info("Obtained job", slog.Any("job", job))
 	}
 
-	// // Run/setup http server
-	// ctx := context.Background()
-	// err = run(ctx, nil, nil, nil, nil, nil)
-	// if err != nil {
-	// 	fmt.Println(err)
-	// 	os.Exit(2)
-	// }
+	// Run/setup http server
+	ctx := context.Background()
+	err = run(ctx, nil, nil, nil, nil, nil)
+	if err != nil {
+		logger.Error(err.Error())
+		os.Exit(2)
+	}
 }

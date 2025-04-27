@@ -1,0 +1,26 @@
+basePath: /api/v1
+definitions:
+  main.Body:
+    properties:
+      message:
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /hello:
+    get:
+      consumes:
+      - application/json
+      description: do thing
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Body'
+      summary: hello world example
+      tags:
+      - my_example
+swagger: "2.0"

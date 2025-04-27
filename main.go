@@ -11,9 +11,12 @@ import (
 	"os"
 	"strings"
 
+	docs "PrioQueue/docs"
+
 	"github.com/gin-gonic/gin"
 	_ "github.com/mattn/go-sqlite3"
-	// "github.com/swaggo/gin-swagger"
+	swaggerfiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 const JOB_TABLE_NAME string = "jobs"
@@ -133,16 +136,32 @@ func exec(db *sql.DB, query string) (err error) {
 	return err
 }
 
+type Body struct {
+	Message string `json:"message"`
+}
+
 // Http related code. This probably should get moved to another module?
+//	@BasePath	/api/v1
+
+// Example thing wow!
+//
+//	@Summary	hello world example
+//	@Schemes
+//	@Description	do thing
+//	@Tags			my_example
+//	@Accept			json
+//	@Produce		json
+//	@Success		200	{object} Body
+//	@Router			/hello [get]
 func handleHello() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{
-			"message": "hello world\n",
+		c.JSON(http.StatusOK, Body{
+			Message: "hello world\n",
 		})
 	}
 }
 
-func addRoutes(r *gin.Engine) {
+func addRoutes(r *gin.RouterGroup) {
 	r.GET("/hello", handleHello())
 }
 
@@ -154,7 +173,14 @@ func run(
 	stdout, strerr io.Writer,
 ) error {
 	r := gin.Default()
-	addRoutes(r)
+	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	docs.SwaggerInfo.Title = "http Priority Queue"
+	docs.SwaggerInfo.Description = "This api has endpoints for managing a priority queue"
+	docs.SwaggerInfo.Version = "1.0"
+	docs.SwaggerInfo.BasePath = "/api/v1"
+	v1 := r.Group("/api/v1")
+	addRoutes(v1)
+
 	err := r.Run("localhost:8080")
 	return err
 }

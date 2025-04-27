@@ -80,6 +80,36 @@ const docTemplate = `{
             }
         },
         "/jobs/{id}": {
+            "get": {
+                "description": "Gets a job by it's ID",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Jobs"
+                ],
+                "summary": "Get job by id",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Id of job",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/main.Job"
+                        }
+                    }
+                }
+            },
             "patch": {
                 "description": "Updates a jobs priority",
                 "consumes": [

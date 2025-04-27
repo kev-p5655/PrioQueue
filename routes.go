@@ -79,17 +79,55 @@ func handleListJobs(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// @BasePath /api/v1
-// @Summary Update job priority
+// @BasePath	/api/v1
+// @Summary	Get job by id
 // @Schemes
-// @Description Updates a jobs priority
-// @Tags Jobs
-// @Accept json
-// @Produce json
-// @Param id path int true "The id of the job being updated"
-// @Param priority query int true "The new priority"
-// @Success 200 {object} Job
-// @Router /jobs/{id} [patch]
+// @Description	Gets a job by it's ID
+// @Tags			Jobs
+// @Accept			json
+// @Produce		json
+// @Param			id	path		int	true	"Id of job"
+// @Success		200	{object}	Job
+// @Router			/jobs/{id} [get]
+func handleGetJobById(
+	db *sql.DB,
+	logger *slog.Logger,
+) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		id, err := strconv.Atoi(c.Param("id"))
+		if checkBadRequestError(c, err) {
+			logger.Error("Error parsing param id", slog.String("error", err.Error()))
+			return
+		}
+
+		job, err := getJobById(db, id)
+		if checkInternalError(c, err) {
+			logger.Error("Error when getting job by id", slog.String("error", err.Error()))
+			return
+		}
+
+		if len(job) == 0 {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error": "No job found with id",
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, job[0])
+	}
+}
+
+// @BasePath	/api/v1
+// @Summary	Update job priority
+// @Schemes
+// @Description	Updates a jobs priority
+// @Tags			Jobs
+// @Accept			json
+// @Produce		json
+// @Param			id			path		int	true	"The id of the job being updated"
+// @Param			priority	query		int	true	"The new priority"
+// @Success		200			{object}	Job
+// @Router			/jobs/{id} [patch]
 func handleUpdatePriority(
 	db *sql.DB,
 	logger *slog.Logger,
@@ -121,6 +159,7 @@ func handleUpdatePriority(
 
 func addRoutes(r *gin.RouterGroup, db *sql.DB, logger *slog.Logger) {
 	r.GET("/jobs", handleListJobs(db))
+	r.GET("/jobs/:id", handleGetJobById(db, logger))
 	r.POST("/jobs", handleCreateJobs(db, logger))
 	r.PATCH("/jobs/:id", handleUpdatePriority(db, logger))
 }

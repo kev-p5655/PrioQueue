@@ -56,6 +56,26 @@ paths:
       tags:
       - Jobs
   /jobs/{id}:
+    get:
+      consumes:
+      - application/json
+      description: Gets a job by it's ID
+      parameters:
+      - description: Id of job
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/main.Job'
+      summary: Get job by id
+      tags:
+      - Jobs
     patch:
       consumes:
       - application/json

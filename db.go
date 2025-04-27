@@ -2,7 +2,9 @@ package main
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -123,24 +125,79 @@ func getCurrPrio(db *sql.DB) (prio int, err error) {
 	return
 }
 
-func getAllJobs(db *sql.DB) (jobs []Job, err error) {
-	// Define to be empty array, instead of nil.
-	jobs = []Job{}
-	query := fmt.Sprintf(`
+func createSelectJobQuery() string {
+	return fmt.Sprintf(`
 		SELECT id, description, priority, finished_at
 		FROM %s
-		ORDER by priority ASC
 		`,
 		JOB_TABLE_NAME,
 	)
-	rows, err := db.Query(query)
+}
+func createWhereSelectJobQuery(column string, value string) string {
+	return fmt.Sprintf(`
+		WHERE %s = %s
+		`,
+		column,
+		value,
+	)
+}
+
+const (
+	Asc  = "ASC"
+	Desc = "DESC"
+)
+
+func createOrderByPriority(asc bool) string {
+	var order string
+	if asc {
+		order = Asc
+	} else {
+		order = Desc
+	}
+	return fmt.Sprintf(`
+			ORDER by priority %s
+			`,
+		order,
+	)
+}
+
+func rowsToJobs(rows *sql.Rows) (jobs []Job, err error) {
 	for rows.Next() {
 		var job Job
-		if err := rows.Scan(&job.Id, &job.Description, &job.Priority, &job.FinishedAt); err != nil {
-			return jobs, err
+		err = rows.Scan(&job.Id, &job.Description, &job.Priority, &job.FinishedAt)
+		if err != nil {
+			return
 		}
 		jobs = append(jobs, job)
 	}
+	return
+}
+
+func getJobById(db *sql.DB, id int) (jobs []Job, err error) {
+	query := createSelectJobQuery() + createWhereSelectJobQuery("id", strconv.Itoa(id))
+	rows, err := db.Query(query)
+	if err != nil {
+		return
+	}
+	jobs, err = rowsToJobs(rows)
+	if len(jobs) > 1 {
+		// TODO: Maybe this logic shouldn't exist here?
+		//	And should exist in the route handler?
+		return nil, errors.New("db: multiple jobs with the same ID")
+	}
+	return
+}
+
+func getAllJobs(db *sql.DB) (jobs []Job, err error) {
+	// Define to be empty array, instead of nil.
+	jobs = []Job{}
+	query := createSelectJobQuery() + createOrderByPriority(true)
+	rows, err := db.Query(query)
+	if err != nil {
+		return
+	}
+
+	jobs, err = rowsToJobs(rows)
 	return
 }
 
